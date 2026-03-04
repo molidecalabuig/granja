@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moli de Calabuig v33.0 - DADES RIGUROSES</title>
+    <style>
+        :root { --p: #1a252f; --s: #27ae60; --w: #f39c12; --d: #c0392b; --bg: #ecf0f1; --inf: #8e44ad; --higiene: #3498db; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; font-size: 14px; }
+        .header { background: var(--p); color: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; position: sticky; top: 0; z-index: 1000; }
+        .nav { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px; }
+        .tab-btn { padding: 10px 2px; border: none; border-radius: 8px; background: #bdc3c7; cursor: pointer; font-weight: bold; font-size: 0.7em; }
+        .tab-btn.active { background: var(--s); color: white; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 10px; }
+        .card { background: white; padding: 10px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-top: 6px solid #ccc; position: relative; min-height: 120px; }
+        .silo-actiu { border-top-color: var(--s); }
+        .silo-critic { border-top-color: var(--d) !important; background: #fff5f5; }
+        .silo-baix { border-top-color: var(--w) !important; background: #fffdf2; }
+        .silo-buit { opacity: 0.5; border-top-color: #eee; }
+        
+        .corrals-info { font-size: 0.6em; color: #7f8c8d; display: block; line-height: 1.1; margin-top: 2px; min-height: 2.2em; }
+        
+        input, select { width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        .btn-gran { color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .hidden { display: none; }
+
+        .log-item { background: white; padding: 10px; border-bottom: 1px solid #eee; font-size: 0.85em; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--p); margin-bottom: 5px; border-radius: 4px; }
+        .btn-del { background: none; border: 1px solid #ddd; color: #e74c3c; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+        .barra-f { background: #eee; height: 6px; border-radius: 3px; margin: 6px 0; overflow: hidden; }
+        .barra-n { height: 100%; transition: 0.8s; }
+    </style>
+</head>
+<body>
+
+    <div class="header"><div id="log-txt">Moli de Calabuig v33</div></div>
+
+    <div class="nav">
+        <button class="tab-btn active" id="btn-estat" onclick="showTab('estat')">📦 SILOS</button>
+        <button class="tab-btn" id="btn-entrada" onclick="showTab('entrada')">🚛 ALB.</button>
+        <button class="tab-btn" id="btn-mov-p" onclick="showTab('mov-p')">⚖️ PINS.</button>
+        <button class="tab-btn" id="btn-mov-a" onclick="showTab('mov-a')">🐄 BEST.</button>
+        <button class="tab-btn" id="btn-historic" onclick="showTab('historic')">📜 LOG</button>
+    </div>
+
+    <div id="sec-estat"><div class="grid" id="silos-cont"></div></div>
+
+    <div id="sec-entrada" class="hidden">
+        <div class="card" style="max-width: 400px; margin: auto;">
+            <h3>🚛 Nou Albarà</h3>
+            <input type="date" id="alb-data">
+            <input type="text" id="alb-codi" placeholder="Número Albarà">
+            <input type="number" id="alb-total" placeholder="Total Kg" oninput="validarAlb()">
+            <div id="alb-llista"></div>
+            <div id="alb-fb" style="text-align:center; padding:10px; font-weight:bold"></div>
+            <button class="btn-gran" id="btn-save-alb" style="background:var(--s)" onclick="guardarAlb()" disabled>💾 GUARDAR</button>
+        </div>
+    </div>
+
+    <div id="sec-mov-p" class="hidden">
+        <div class="card" style="max-width: 400px; margin: auto;">
+            <h3>⚖️ Moure Pinso Intern</h3>
+            <input type="date" id="p-data">
+            <label>Origen:</label><select id="p-origen"></select>
+            <label>Destí:</label><select id="p-desti"></select>
+            <input type="number" id="p-kg" placeholder="Kg">
+            <button class="btn-gran" style="background:var(--w)" onclick="executarMovPinso()">MOURE</button>
+        </div>
+    </div>
+
+    <div id="sec-mov-a" class="hidden">
+        <div class="card" style="max-width: 400px; margin: auto;">
+            <h3>🐄 Gestió de Bestiar</h3>
+            <input type="date" id="a-data">
+            <select id="a-tipus" onchange="canviTipusMov()">
+                <option value="TRASLLAT">Trasllat Intern</option>
+                <option value="ENTRADA">Entrada de Garrins</option>
+                <option value="MORT">Baixa (Mort)</option>
+                <option value="SORTIDA">Sortida (Escorxador/Venda)</option>
+            </select>
+            <div id="div-origen"><label>Origen:</label><select id="a-origen"></select></div>
+            <div id="div-desti"><label>Destí:</label><select id="a-desti"></select></div>
+            <input type="number" id="a-n" value="1">
+            <button class="btn-gran" id="btn-mov-animal" style="background:var(--inf)" onclick="executarMovAnimal()">REGISTRAR</button>
+        </div>
+    </div>
+
+    <div id="sec-historic" class="hidden">
+        <div class="card"><h3>📜 Registre de Moviments</h3><div id="log-llista"></div></div>
+    </div>
+
+<script>
+    // TAULA EXACTA CORRALS - SILOS
+    const CORRALS = {
+        "S03": "C0301, C0302, C0303, C0304",
+        "S04": "C0405, C0406, C0407, C0408, C0409",
+        "S05": "C050D, C050E",
+        "S06": "C060D, C060E",
+        "S07": "C070D, C070E",
+        "S08": "C080D, C080E",
+        "S09": "C090D, C090E",
+        "S10": "C100D, C100E",
+        "S11": "C110D, C110E",
+        "S12": "C120D, C120E",
+        "S13": "C130D, C130E",
+        "S14": "C140D, C140E",
+        "S0A": "C0A01, C0A02, C0A03, C0A04",
+        "S0B": "C0B05, C0B06, C0B07, C0B08",
+        "S0C": "C0C09, C0C10, C0C11, C0C12",
+        "S0D": "C0D0D, C0D0E",
+        "S0E": "C0E0D, C0E0E",
+        "S0F": "C0F0D, C0F0E",
+        "S0G": "C0G0D, C0G0E"
+    };
+
+    const IDs = Object.keys(CORRALS);
+    const avuiStr = new Date().toISOString().split('T')[0];
+
+    let dades = JSON.parse(localStorage.getItem('moli_v33_data')) || {
+        silos: IDs.map(id => {
+            let esPetit = ["S0C","S0D","S0E","S0F","S0G"].includes(id);
+            let s = { id: id, estoc: 0, cap: 0, max: esPetit ? 8000 : 10400, n: new Date().getTime() };
+            if(id==="S0A"){ s.estoc=4501; s.cap=32; }
+            if(id==="S0B"){ s.estoc=3136; s.cap=33; }
+            if(id==="S0C"){ s.estoc=2386; s.cap=15; }
+            if(id==="S0D"){ s.estoc=7370; s.cap=37; }
+            if(id==="S0E"){ s.estoc=7180; s.cap=35; }
+            if(id==="S0F"){ s.estoc=6855; s.cap=32; }
+            if(id==="S0G"){ s.estoc=7300; s.cap=30; }
+            return s;
+        }),
+        infermeria: { id: "INF", animals: 0, estoc: 0 },
+        logs: []
+    };
+
+    function renderSilos() {
+        const cont = document.getElementById('silos-cont');
+        cont.innerHTML = '';
+        dades.silos.forEach((s, idx) => {
+            const dies = s.cap > 0 ? Math.floor(s.estoc / (s.cap * 9)) : 0;
+            let cls = "card " + (s.cap > 0 ? (s.estoc < 1500 ? 'silo-critic' : (dies < 4 ? 'silo-baix' : 'silo-actiu')) : 'silo-buit');
+            cont.innerHTML += `
+                <div class="${cls}">
+                    <div style="display:flex; justify-content:space-between; align-items:start">
+                        <b>${s.id}</b>
+                        <span style="font-size:0.5em; color:#999">${s.max}kg</span>
+                    </div>
+                    <span class="corrals-info">${CORRALS[s.id]}</span>
+                    <div class="barra-f"><div class="barra-n" style="width:${Math.min((s.estoc/s.max)*100, 100)}%; background:${s.estoc < 1500 ? 'var(--d)' : 'var(--s)'}"></div></div>
+                    <div style="font-weight:bold; font-size:1.1em">${Math.round(s.estoc)} kg</div>
+                    <div style="font-size:0.75em">${s.cap} cap • ${dies} dies</div>
+                    <button style="width:100%; font-size:0.6em; margin-top:5px; padding:4px; border-radius:4px; border:1px solid #ddd; background:#f9f9f9" onclick="ajust(${idx})">AJUST</button>
+                </div>`;
+        });
+        localStorage.setItem('moli_v33_data', JSON.stringify(dades));
+        selects();
+    }
+
+    // --- LÒGICA DE NEGOCI ---
+    function executarMovPinso() {
+        const data = document.getElementById('p-data').value;
+        const o = dades.silos.find(s => s.id === document.getElementById('p-origen').value);
+        const dID = document.getElementById('p-desti').value;
+        const k = parseFloat(document.getElementById('p-kg').value);
+        if(!k || k > o.estoc) return alert("Quantitat incorrecta");
+        o.estoc -= k;
+        if(dID === "INF") dades.infermeria.estoc += k; else dades.silos.find(s => s.id === dID).estoc += k;
+        dades.logs.unshift({ id: Date.now(), data: data, t: "PINSO", txt: k+"kg de "+o.id+" a "+dID, kg: k, ori: o.id, des: dID });
+        showTab('estat');
+    }
+
+    function executarMovAnimal() {
+        const t = document.getElementById('a-tipus').value;
+        const n = parseInt(document.getElementById('a-n').value) || 0;
+        const data = document.getElementById('a-data').value;
+        const idOri = document.getElementById('a-origen').value;
+        const idDes = document.getElementById('a-desti').value;
+        let ori = idOri === "INF" ? dades.infermeria : dades.silos.find(s => s.id === idOri);
+        let des = idDes === "INF" ? dades.infermeria : dades.silos.find(s => s.id === idDes);
+        let logTxt = "";
+        if(t === "TRASLLAT") { ori.cap -= n; des.cap += n; logTxt = `${n} de ${idOri} a ${idDes}`; }
+        else if(t === "ENTRADA") { des.cap += n; logTxt = `${n} nous a ${idDes}`; }
+        else if(t === "MORT") { ori.cap -= n; logTxt = `${n} mort a ${idOri}`; }
+        else if(t === "SORTIDA") { ori.cap -= n; logTxt = `${n} sortida de ${idOri}`; }
+        dades.logs.unshift({ id: Date.now(), data: data, t: t, txt: logTxt, n: n, ori: idOri, des: idDes });
+        showTab('estat');
+    }
+
+    function anularMov(idMov) {
+        if(!confirm("Anular moviment?")) return;
+        const m = dades.logs.find(l => l.id === idMov);
+        if(m.t === "TRASLLAT") {
+            let o = m.ori === "INF" ? dades.infermeria : dades.silos.find(s => s.id === m.ori);
+            let d = m.des === "INF" ? dades.infermeria : dades.silos.find(s => s.id === m.des);
+            o.cap += m.n; d.cap -= m.n;
+        } else if(m.t === "ENTRADA") { dades.silos.find(s => s.id === m.des).cap -= m.n;
+        } else if(m.t === "MORT" || m.t === "SORTIDA") {
+            let o = m.ori === "INF" ? dades.infermeria : dades.silos.find(s => s.id === m.ori); o.cap += m.n;
+        } else if(m.t === "ALBARÀ") { m.detall.forEach(d => { dades.silos.find(x => x.id === d.silo).estoc -= d.kg; });
+        } else if(m.t === "PINSO") {
+            let o = dades.silos.find(s => s.id === m.ori);
+            let d = m.des === "INF" ? dades.infermeria : dades.silos.find(s => s.id === m.des);
+            o.estoc += m.kg; d.estoc -= m.kg;
+        }
+        dades.logs = dades.logs.filter(l => l.id !== idMov);
+        showTab('historic');
+    }
+
+    function guardarAlb() {
+        const data = document.getElementById('alb-data').value;
+        const codi = document.getElementById('alb-codi').value;
+        let detall = [];
+        document.querySelectorAll('.in-alb').forEach(i => {
+            let v = parseFloat(i.value) || 0;
+            if(v > 0) {
+                let s = dades.silos.find(x => x.id === i.dataset.id);
+                s.estoc += v; detall.push({silo: s.id, kg: v});
+            }
+        });
+        dades.logs.unshift({ id: Date.now(), data: data, t: "ALBARÀ", txt: "Nº "+codi, detall: detall });
+        showTab('estat');
+    }
+
+    // --- UI ---
+    function showTab(t) {
+        ["estat","entrada","mov-p","mov-a","historic"].forEach(s => {
+            document.getElementById('sec-'+s).classList.add('hidden');
+            document.getElementById('btn-'+s).classList.remove('active');
+        });
+        document.getElementById('sec-'+t).classList.remove('hidden');
+        document.getElementById('btn-'+t).classList.add('active');
+        if(t==='estat') renderSilos();
+        if(t==='entrada') { document.getElementById('alb-data').value = avuiStr; prepararAlb(); }
+        if(t==='mov-p') { document.getElementById('p-data').value = avuiStr; }
+        if(t==='mov-a') { document.getElementById('a-data').value = avuiStr; canviTipusMov(); }
+        if(t==='historic') {
+            document.getElementById('log-llista').innerHTML = dades.logs.map(l => `
+                <div class="log-item">
+                    <div><b>[${l.data}]</b> <strong>${l.t}</strong>: ${l.txt}</div>
+                    <button class="btn-del" onclick="anularMov(${l.id})">🗑️</button>
+                </div>`).join('') || 'Cap moviment.';
+        }
+    }
+
+    function selects() {
+        let opCaps = dades.silos.map(s => `<option value="${s.id}">${s.id} (${s.cap} cap)</option>`).join('');
+        let opKg = dades.silos.map(s => `<option value="${s.id}">${s.id} (${Math.round(s.estoc)}kg)</option>`).join('');
+        document.getElementById('p-origen').innerHTML = opKg;
+        document.getElementById('p-desti').innerHTML = `<option value="INF">🏥 INF</option>` + dades.silos.map(s => `<option value="${s.id}">${s.id}</option>`).join('');
+        document.getElementById('a-origen').innerHTML = `<option value="INF">🏥 INF</option>` + opCaps;
+        document.getElementById('a-desti').innerHTML = `<option value="INF">🏥 INF</option>` + opCaps;
+    }
+
+    function canviTipusMov() {
+        const t = document.getElementById('a-tipus').value;
+        document.getElementById('div-origen').style.display = (t==="ENTRADA") ? "none" : "block";
+        document.getElementById('div-desti').style.display = (t==="MORT" || t==="SORTIDA") ? "none" : "block";
+    }
+
+    function validarAlb() {
+        let t = parseFloat(document.getElementById('alb-total').value) || 0;
+        let s = 0; let over = false;
+        document.querySelectorAll('.in-alb').forEach(i => {
+            let v = parseFloat(i.value) || 0;
+            let silo = dades.silos.find(x => x.id === i.dataset.id);
+            if(v + silo.estoc > silo.max) over = true; s += v;
+        });
+        let ok = t > 0 && Math.abs(t - s) < 1 && !over && document.getElementById('alb-codi').value !== "";
+        document.getElementById('alb-fb').innerHTML = over ? "🚨 SOBREPASSES MÀXIM!" : (ok ? "✅ QUADRAT" : "Falten " + Math.round(t-s) + "kg");
+        document.getElementById('btn-save-alb').disabled = !ok;
+    }
+
+    function prepararAlb() {
+        document.getElementById('alb-llista').innerHTML = dades.silos.map(s => `<div style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #eee; align-items:center"><b>${s.id}</b> <input type="number" class="in-alb" data-id="${s.id}" style="width:80px" oninput="validarAlb()"></div>`).join('');
+    }
+
+    function ajust(i) {
+        let s = dades.silos[i];
+        let c = prompt("Animals reals?", s.cap); if(c!==null) s.cap = parseInt(c);
+        let k = prompt("Kg reals?", s.estoc); if(k!==null) s.estoc = parseFloat(k);
+        renderSilos();
+    }
+
+    renderSilos();
+</script>
+</body>
+</html>
