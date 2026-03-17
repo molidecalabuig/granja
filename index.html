@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moli v36.0 - Cloud & Consum</title>
+    <title>Moli v36.1 - Cloud & Consum (Fix Cronologia)</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
         :root { --p: #1a252f; --s: #27ae60; --w: #f39c12; --d: #c0392b; --bg: #ecf0f1; --inf: #8e44ad; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; font-size: 14px; }
-       
-        /* PANTALLA LOGIN */
+        
         #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--p); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; color: white; padding: 20px; box-sizing: border-box; }
-       
+        
         .header { background: var(--p); color: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; position: sticky; top: 0; z-index: 1000; }
         .status-cloud { font-size: 0.75em; color: #2ecc71; margin-top: 5px; font-weight: bold; }
         .nav { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px; }
@@ -35,14 +34,14 @@
 
     <div id="login-screen">
         <h2 style="margin-bottom:10px;">MOLÍ DE CALABUIG</h2>
-        <p style="opacity: 0.8;">Accés restringit</p>
+        <p style="opacity: 0.8;">Accés restringit (v36.1)</p>
         <input type="text" id="pin-input" placeholder="PIN d'accés" style="max-width: 200px; text-align: center;">
         <button class="btn-gran" style="background: var(--s); max-width: 200px;" onclick="checkPin()">ENTRAR</button>
     </div>
 
     <div id="app-content" class="hidden">
         <div class="header">
-            <div>Moli de Calabuig v36.0</div>
+            <div>Moli de Calabuig v36.1</div>
             <div class="status-cloud">☁️ NÚVOL ACTIU</div>
         </div>
 
@@ -135,7 +134,7 @@
             const val = snapshot.val();
             if (val) {
                 dades = val;
-                calcularConsum();
+                calcularConsum(); 
                 renderSilos();
                 selects();
                 if (document.getElementById('sec-historic').className !== 'hidden') renderLogs();
@@ -143,13 +142,15 @@
         });
     }
 
-    function calcularConsum() {
+    // --- LOGICA DE CONSUM REVISADA PER A DATES PASSADES ---
+    function calcularConsum(dataReferenciaManual = null) {
         const ara = Date.now();
-        const darreraVegada = dades.lastSync || ara;
-        const hores = (ara - darreraVegada) / (1000 * 60 * 60);
-       
-        // Restem pinso si ha passat més de 15 minuts per precisió
-        if (hores > 0.25) {
+        // Si dataReferenciaManual existeix (ex: data albarà), calculem des d'allà fins ara.
+        // Si no, calculem des de l'última vegada que es va obrir l'app.
+        const iniciCàlcul = dataReferenciaManual || dades.lastSync || ara;
+        const hores = (ara - iniciCàlcul) / (1000 * 60 * 60);
+        
+        if (hores > 0.05) { // Més de 3 minuts
             dades.silos.forEach(s => {
                 if (s.cap > 0) {
                     let consumHores = (s.cap * 9 / 24) * hores;
@@ -157,7 +158,7 @@
                 }
             });
             dades.lastSync = ara;
-            db.ref('moli_data').set(dades);
+            // No fem el set aquí per evitar bucles si estem dins d'una altra funció
         }
     }
 
@@ -180,7 +181,6 @@
         });
     }
 
-    // --- FUNCIONS DE GESTIÓ ---
     function showTab(t) {
         ["estat","entrada","mov-p","mov-a","historic"].forEach(s => {
             document.getElementById('sec-'+s).classList.add('hidden');
@@ -194,13 +194,15 @@
         if(t==='historic') renderLogs();
     }
 
-    function ajustarDades(novaData) { db.ref('moli_data').set(novaData); }
+    function ajustarDades(novaData) { 
+        novaData.lastSync = Date.now();
+        db.ref('moli_data').set(novaData); 
+    }
 
     function ajust(i) {
         let s = dades.silos[i];
         let c = prompt("Animals reals en aquest silo?", s.cap); if(c!==null) s.cap = parseInt(c) || 0;
         let k = prompt("Quilos reals en aquest silo?", s.estoc); if(k!==null) s.estoc = parseFloat(k) || 0;
-        dades.lastSync = Date.now();
         ajustarDades(dades);
     }
 
@@ -225,43 +227,62 @@
         document.getElementById('btn-save-alb').disabled = !ok;
     }
 
+    // --- ACCIONS AMB RECALCULAT CRONOLÒGIC ---
+
     function guardarAlb() {
-        const data = document.getElementById('alb-data').value;
+        const dataInput = document.getElementById('alb-data').value;
+        const dataMs = new Date(dataInput).getTime();
         const codi = document.getElementById('alb-codi').value;
+
+        // Afegim l'estoc
         document.querySelectorAll('.in-alb').forEach(i => {
             let v = parseFloat(i.value) || 0;
             if(v > 0) dades.silos.find(x => x.id === i.dataset.id).estoc += v;
         });
+
         if(!dades.logs) dades.logs = [];
-        dades.logs.unshift({ id: Date.now(), data: data, t: "ALBARÀ", txt: "Nº "+codi });
+        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "ALBARÀ", txt: "Nº "+codi });
+        
+        // RECALCULEM: Si la data és passada, restem el consum des de llavors fins ara
+        calcularConsum(dataMs);
+        
         ajustarDades(dades);
         showTab('estat');
     }
 
     function executarMovPinso() {
+        const dataInput = document.getElementById('p-data').value;
+        const dataMs = new Date(dataInput).getTime();
         const oID = document.getElementById('p-origen').value;
         const dID = document.getElementById('p-desti').value;
         const k = parseFloat(document.getElementById('p-kg').value);
+        
         let ori = dades.silos.find(s => s.id === oID);
         if(!k || k > ori.estoc) return alert("Error en quantitat");
+
         ori.estoc -= k;
-        if(dID === "INF") dades.infermeria.estoc += k; else dades.silos.find(s => s.id === dID).estoc += k;
-        dades.logs.unshift({ id: Date.now(), data: document.getElementById('p-data').value, t: "PINSO", txt: k+"kg de "+oID+" a "+dID });
+        if(dID === "INF") dades.infermeria.estoc += k; 
+        else dades.silos.find(s => s.id === dID).estoc += k;
+
+        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "PINSO", txt: k+"kg de "+oID+" a "+dID });
+        
+        // Recalculem consum per si la data és anterior
+        calcularConsum(dataMs);
+        
         ajustarDades(dades);
         showTab('estat');
     }
 
-    function canviTipusMov() {
-        const t = document.getElementById('a-tipus').value;
-        document.getElementById('div-origen').style.display = (t==="ENTRADA") ? "none" : "block";
-        document.getElementById('div-desti').style.display = (t==="MORT" || t==="SORTIDA") ? "none" : "block";
-    }
-
     function executarMovAnimal() {
+        const dataInput = document.getElementById('a-data').value;
         const t = document.getElementById('a-tipus').value;
         const n = parseInt(document.getElementById('a-n').value) || 0;
         const idOri = document.getElementById('a-origen').value;
         const idDes = document.getElementById('a-desti').value;
+
+        // Abans de moure els animals, ens assegurem que el consum actual estigui al dia
+        calcularConsum();
+
         if(t === "TRASLLAT") {
             (idOri==="INF"?dades.infermeria:dades.silos.find(s=>s.id===idOri)).cap -= n;
             (idDes==="INF"?dades.infermeria:dades.silos.find(s=>s.id===idDes)).cap += n;
@@ -270,7 +291,8 @@
         } else {
             (idOri==="INF"?dades.infermeria:dades.silos.find(s=>s.id===idOri)).cap -= n;
         }
-        dades.logs.unshift({ id: Date.now(), data: document.getElementById('a-data').value, t: t, txt: n+" caps ("+idOri+"->"+idDes+")" });
+
+        dades.logs.unshift({ id: Date.now(), data: dataInput, t: t, txt: n+" caps ("+idOri+"->"+idDes+")" });
         ajustarDades(dades);
         showTab('estat');
     }
