@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moli v36.2 - Gestió Avançada</title>
+    <title>Moli v36.3 - Gestió Intel·ligent</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
         :root { --p: #1a252f; --s: #27ae60; --w: #f39c12; --d: #c0392b; --bg: #ecf0f1; --inf: #8e44ad; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; font-size: 14px; }
-        
         #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--p); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; color: white; padding: 20px; box-sizing: border-box; }
-        
         .header { background: var(--p); color: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; position: sticky; top: 0; z-index: 1000; }
         .status-cloud { font-size: 0.75em; color: #2ecc71; margin-top: 5px; font-weight: bold; }
         .nav { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px; }
@@ -28,27 +26,23 @@
         input, select { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
         .btn-gran { color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 10px; }
         .consum-info { font-size: 0.65em; color: #e67e22; font-weight: bold; margin-top: 4px; display: block; }
-        
-        /* Estils per al LOG editable */
         .log-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .log-actions { display: flex; gap: 8px; }
         .btn-mini { border: none; background: #eee; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 1.1em; }
-        .btn-del:hover { background: #ffdada; }
-        .btn-edit:hover { background: #daffdf; }
     </style>
 </head>
 <body>
 
     <div id="login-screen">
-        <h2 style="margin-bottom:10px;">MOLÍ DE CALABUIG</h2>
-        <p style="opacity: 0.8;">Accés restringit (v36.2)</p>
+        <h2>MOLÍ DE CALABUIG</h2>
+        <p style="opacity: 0.8;">Accés restringit (v36.3)</p>
         <input type="text" id="pin-input" placeholder="PIN d'accés" style="max-width: 200px; text-align: center;">
         <button class="btn-gran" style="background: var(--s); max-width: 200px;" onclick="checkPin()">ENTRAR</button>
     </div>
 
     <div id="app-content" class="hidden">
         <div class="header">
-            <div>Moli de Calabuig v36.2</div>
+            <div>Moli de Calabuig v36.3</div>
             <div class="status-cloud">☁️ NÚVOL ACTIU</div>
         </div>
 
@@ -105,7 +99,6 @@
         <div id="sec-historic" class="hidden">
             <div class="card">
                 <h3>📜 Registre de Moviments</h3>
-                <p style="font-size: 0.7em; color: gray; margin-bottom: 10px;">* L'edició de text o l'eliminació no afecta l'estoc calculat prèviament, només corregeix el registre visual.</p>
                 <div id="log-llista"></div>
             </div>
         </div>
@@ -113,7 +106,6 @@
 
 <script>
     const PIN_CORRECTE = "hortanic_00";
-
     const firebaseConfig = {
         apiKey: "AIzaSyDpORuJEtCNaGQlztiJOy6-HyHSyTYiMp4",
         authDomain: "moli-de-calabuig-7a2f2.firebaseapp.com",
@@ -126,7 +118,6 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-
     let dades = { silos: [], logs: [], lastSync: Date.now(), infermeria: { id: "INF", animals: 0, estoc: 0 } };
     const avuiStr = new Date().toISOString().split('T')[0];
 
@@ -156,7 +147,6 @@
         const ara = Date.now();
         const iniciCàlcul = dataReferenciaManual || dades.lastSync || ara;
         const hores = (ara - iniciCàlcul) / (1000 * 60 * 60);
-        
         if (hores > 0.05) { 
             dades.silos.forEach(s => {
                 if (s.cap > 0) {
@@ -235,21 +225,23 @@
 
     function guardarAlb() {
         const dataInput = document.getElementById('alb-data').value;
-        const dataMs = new Date(dataInput).getTime();
         const codi = document.getElementById('alb-codi').value;
+        let resum = "";
         document.querySelectorAll('.in-alb').forEach(i => {
             let v = parseFloat(i.value) || 0;
-            if(v > 0) dades.silos.find(x => x.id === i.dataset.id).estoc += v;
+            if(v > 0) {
+                dades.silos.find(x => x.id === i.dataset.id).estoc += v;
+                resum += i.dataset.id + ":" + v + "kg ";
+            }
         });
-        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "ALBARÀ", txt: "Nº "+codi });
-        calcularConsum(dataMs);
+        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "ALBARÀ", txt: "Nº "+codi + " ("+resum+")", val: resum });
+        calcularConsum(new Date(dataInput).getTime());
         ajustarDades(dades);
         showTab('estat');
     }
 
     function executarMovPinso() {
         const dataInput = document.getElementById('p-data').value;
-        const dataMs = new Date(dataInput).getTime();
         const oID = document.getElementById('p-origen').value;
         const dID = document.getElementById('p-desti').value;
         const k = parseFloat(document.getElementById('p-kg').value);
@@ -257,8 +249,8 @@
         if(!k || k > ori.estoc) return alert("Error en quantitat");
         ori.estoc -= k;
         if(dID === "INF") dades.infermeria.estoc += k; else dades.silos.find(s => s.id === dID).estoc += k;
-        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "PINSO", txt: k+"kg de "+oID+" a "+dID });
-        calcularConsum(dataMs);
+        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "PINSO", txt: k+"kg de "+oID+" a "+dID, ori: oID, des: dID, kg: k });
+        calcularConsum(new Date(dataInput).getTime());
         ajustarDades(dades);
         showTab('estat');
     }
@@ -283,36 +275,48 @@
         showTab('estat');
     }
 
-    // --- FUNCIONS DE LOG (EDITAR / ELIMINAR) ---
-
     function renderLogs() {
         const logCont = document.getElementById('log-llista');
         logCont.innerHTML = (dades.logs || []).slice(0, 30).map((l, index) => `
             <div class="log-item">
                 <span><b>[${l.data}]</b> ${l.t}: ${l.txt}</span>
                 <div class="log-actions">
-                    <button class="btn-mini btn-edit" onclick="editarLog(${index})">✏️</button>
-                    <button class="btn-mini btn-del" onclick="eliminarLog(${index})">🗑️</button>
+                    <button class="btn-mini" onclick="eliminarLog(${index})">🗑️</button>
                 </div>
             </div>`).join('') || 'Sense registres.';
     }
 
     function eliminarLog(index) {
-        if(confirm("Segur que vols eliminar aquest registre? (Això no revertirà els quilos, només esborra l'entrada del log)")) {
-            dades.logs.splice(index, 1);
-            ajustarDades(dades);
-        }
-    }
-
-    function editarLog(index) {
         let l = dades.logs[index];
-        let novaData = prompt("Nova data (AAAA-MM-DD):", l.data);
-        let nouTxt = prompt("Modificar descripció:", l.txt);
-        if(novaData !== null && nouTxt !== null) {
-            l.data = novaData;
-            l.txt = nouTxt;
-            ajustarDades(dades);
+        let revertir = false;
+
+        // Si és un moviment de pinso o albarà, preguntem si revertim estoc
+        if(l.t === "ALBARÀ" || l.t === "PINSO") {
+            revertir = confirm("Vols REVERTIR els quilos al silo abans d'esborrar el registre?");
+        } else {
+            if(!confirm("Segur que vols esborrar aquest registre?")) return;
         }
+
+        if(revertir) {
+            if(l.t === "ALBARÀ") {
+                // L'albarà guardava: "Silo:Kg Silo:Kg"
+                let parts = l.val.trim().split(" ");
+                parts.forEach(p => {
+                    let [id, kg] = p.split(":");
+                    let silo = dades.silos.find(s => s.id === id);
+                    if(silo) silo.estoc -= parseFloat(kg);
+                });
+            } else if(l.t === "PINSO") {
+                // El pinso guardava origen, destí i kg
+                let ori = dades.silos.find(s => s.id === l.ori);
+                let des = (l.des === "INF") ? dades.infermeria : dades.silos.find(s => s.id === l.des);
+                if(ori) ori.estoc += l.kg;
+                if(des) des.estoc -= l.kg;
+            }
+        }
+
+        dades.logs.splice(index, 1);
+        ajustarDades(dades);
     }
 
     function canviTipusMov() {
