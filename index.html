@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moli v36.3 - Gestió Intel·ligent</title>
+    <title>Moli v36.4 - Edició Completa</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -28,21 +28,21 @@
         .consum-info { font-size: 0.65em; color: #e67e22; font-weight: bold; margin-top: 4px; display: block; }
         .log-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .log-actions { display: flex; gap: 8px; }
-        .btn-mini { border: none; background: #eee; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 1.1em; }
+        .btn-mini { border: none; background: #eee; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 1.1em; }
     </style>
 </head>
 <body>
 
     <div id="login-screen">
         <h2>MOLÍ DE CALABUIG</h2>
-        <p style="opacity: 0.8;">Accés restringit (v36.3)</p>
+        <p style="opacity: 0.8;">Accés restringit (v36.4)</p>
         <input type="text" id="pin-input" placeholder="PIN d'accés" style="max-width: 200px; text-align: center;">
         <button class="btn-gran" style="background: var(--s); max-width: 200px;" onclick="checkPin()">ENTRAR</button>
     </div>
 
     <div id="app-content" class="hidden">
         <div class="header">
-            <div>Moli de Calabuig v36.3</div>
+            <div>Moli de Calabuig v36.4</div>
             <div class="status-cloud">☁️ NÚVOL ACTIU</div>
         </div>
 
@@ -226,15 +226,16 @@
     function guardarAlb() {
         const dataInput = document.getElementById('alb-data').value;
         const codi = document.getElementById('alb-codi').value;
-        let resum = "";
+        let resum = ""; let totalKg = 0;
         document.querySelectorAll('.in-alb').forEach(i => {
             let v = parseFloat(i.value) || 0;
             if(v > 0) {
                 dades.silos.find(x => x.id === i.dataset.id).estoc += v;
-                resum += i.dataset.id + ":" + v + "kg ";
+                resum += i.dataset.id + ":" + v + " ";
+                totalKg += v;
             }
         });
-        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "ALBARÀ", txt: "Nº "+codi + " ("+resum+")", val: resum });
+        dades.logs.unshift({ id: Date.now(), data: dataInput, t: "ALBARÀ", txt: "Nº "+codi + " ("+totalKg+"kg)", val: resum, kg: totalKg });
         calcularConsum(new Date(dataInput).getTime());
         ajustarDades(dades);
         showTab('estat');
@@ -281,40 +282,67 @@
             <div class="log-item">
                 <span><b>[${l.data}]</b> ${l.t}: ${l.txt}</span>
                 <div class="log-actions">
+                    <button class="btn-mini" onclick="editarLog(${index})">✏️</button>
                     <button class="btn-mini" onclick="eliminarLog(${index})">🗑️</button>
                 </div>
             </div>`).join('') || 'Sense registres.';
     }
 
+    function editarLog(index) {
+        let l = dades.logs[index];
+        let novaData = prompt("Data (AAAA-MM-DD):", l.data);
+        if(!novaData) return;
+        
+        let nouTxt = prompt("Descripció del moviment:", l.txt);
+        if(!nouTxt) return;
+
+        // Si és un PINSO o ALBARÀ, permetem corregir els quilos
+        if(l.t === "PINSO" || l.t === "ALBARÀ") {
+            let nouKg = prompt("Corregir quilos totals (només número):", l.kg);
+            if(nouKg !== null && parseFloat(nouKg) !== l.kg) {
+                let diff = parseFloat(nouKg) - l.kg;
+                if(l.t === "PINSO") {
+                    let ori = dades.silos.find(s => s.id === l.ori);
+                    let des = (l.des === "INF") ? dades.infermeria : dades.silos.find(s => s.id === l.des);
+                    if(ori) ori.estoc -= diff;
+                    if(des) des.estoc += diff;
+                } else {
+                    // Per albarans senzills, ajustem el primer silo del llistat o demanem silo
+                    let siloID = l.val.split(":")[0];
+                    let silo = dades.silos.find(s => s.id === siloID);
+                    if(silo) silo.estoc += diff;
+                }
+                l.kg = parseFloat(nouKg);
+            }
+        }
+        
+        l.data = novaData;
+        l.txt = nouTxt;
+        ajustarDades(dades);
+    }
+
     function eliminarLog(index) {
         let l = dades.logs[index];
-        let revertir = false;
+        let revertir = (l.t === "ALBARÀ" || l.t === "PINSO") ? 
+            confirm("Vols REVERTIR els quilos al silo abans d'esborrar?") : confirm("Segur que vols esborrar?");
+        
+        if(!revertir && (l.t !== "ALBARÀ" && l.t !== "PINSO")) return;
 
-        // Si és un moviment de pinso o albarà, preguntem si revertim estoc
-        if(l.t === "ALBARÀ" || l.t === "PINSO") {
-            revertir = confirm("Vols REVERTIR els quilos al silo abans d'esborrar el registre?");
-        } else {
-            if(!confirm("Segur que vols esborrar aquest registre?")) return;
-        }
-
-        if(revertir) {
+        if(revertir && (l.t === "ALBARÀ" || l.t === "PINSO")) {
             if(l.t === "ALBARÀ") {
-                // L'albarà guardava: "Silo:Kg Silo:Kg"
                 let parts = l.val.trim().split(" ");
                 parts.forEach(p => {
                     let [id, kg] = p.split(":");
                     let silo = dades.silos.find(s => s.id === id);
                     if(silo) silo.estoc -= parseFloat(kg);
                 });
-            } else if(l.t === "PINSO") {
-                // El pinso guardava origen, destí i kg
+            } else {
                 let ori = dades.silos.find(s => s.id === l.ori);
                 let des = (l.des === "INF") ? dades.infermeria : dades.silos.find(s => s.id === l.des);
                 if(ori) ori.estoc += l.kg;
                 if(des) des.estoc -= l.kg;
             }
         }
-
         dades.logs.splice(index, 1);
         ajustarDades(dades);
     }
