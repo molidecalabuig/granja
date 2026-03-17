@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moli v36.1 - Cloud & Consum (Fix Cronologia)</title>
+    <title>Moli v36.2 - Gestió Avançada</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -28,20 +28,27 @@
         input, select { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
         .btn-gran { color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 10px; }
         .consum-info { font-size: 0.65em; color: #e67e22; font-weight: bold; margin-top: 4px; display: block; }
+        
+        /* Estils per al LOG editable */
+        .log-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .log-actions { display: flex; gap: 8px; }
+        .btn-mini { border: none; background: #eee; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 1.1em; }
+        .btn-del:hover { background: #ffdada; }
+        .btn-edit:hover { background: #daffdf; }
     </style>
 </head>
 <body>
 
     <div id="login-screen">
         <h2 style="margin-bottom:10px;">MOLÍ DE CALABUIG</h2>
-        <p style="opacity: 0.8;">Accés restringit (v36.1)</p>
+        <p style="opacity: 0.8;">Accés restringit (v36.2)</p>
         <input type="text" id="pin-input" placeholder="PIN d'accés" style="max-width: 200px; text-align: center;">
         <button class="btn-gran" style="background: var(--s); max-width: 200px;" onclick="checkPin()">ENTRAR</button>
     </div>
 
     <div id="app-content" class="hidden">
         <div class="header">
-            <div>Moli de Calabuig v36.1</div>
+            <div>Moli de Calabuig v36.2</div>
             <div class="status-cloud">☁️ NÚVOL ACTIU</div>
         </div>
 
@@ -96,7 +103,11 @@
         </div>
 
         <div id="sec-historic" class="hidden">
-            <div class="card"><h3>📜 Registre de Moviments</h3><div id="log-llista"></div></div>
+            <div class="card">
+                <h3>📜 Registre de Moviments</h3>
+                <p style="font-size: 0.7em; color: gray; margin-bottom: 10px;">* L'edició de text o l'eliminació no afecta l'estoc calculat prèviament, només corregeix el registre visual.</p>
+                <div id="log-llista"></div>
+            </div>
         </div>
     </div>
 
@@ -124,9 +135,7 @@
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-content').classList.remove('hidden');
             escudarNúvol();
-        } else {
-            alert("PIN Incorrecte");
-        }
+        } else { alert("PIN Incorrecte"); }
     }
 
     function escudarNúvol() {
@@ -134,6 +143,7 @@
             const val = snapshot.val();
             if (val) {
                 dades = val;
+                if(!dades.logs) dades.logs = [];
                 calcularConsum(); 
                 renderSilos();
                 selects();
@@ -142,15 +152,12 @@
         });
     }
 
-    // --- LOGICA DE CONSUM REVISADA PER A DATES PASSADES ---
     function calcularConsum(dataReferenciaManual = null) {
         const ara = Date.now();
-        // Si dataReferenciaManual existeix (ex: data albarà), calculem des d'allà fins ara.
-        // Si no, calculem des de l'última vegada que es va obrir l'app.
         const iniciCàlcul = dataReferenciaManual || dades.lastSync || ara;
         const hores = (ara - iniciCàlcul) / (1000 * 60 * 60);
         
-        if (hores > 0.05) { // Més de 3 minuts
+        if (hores > 0.05) { 
             dades.silos.forEach(s => {
                 if (s.cap > 0) {
                     let consumHores = (s.cap * 9 / 24) * hores;
@@ -158,7 +165,6 @@
                 }
             });
             dades.lastSync = ara;
-            // No fem el set aquí per evitar bucles si estem dins d'una altra funció
         }
     }
 
@@ -227,25 +233,16 @@
         document.getElementById('btn-save-alb').disabled = !ok;
     }
 
-    // --- ACCIONS AMB RECALCULAT CRONOLÒGIC ---
-
     function guardarAlb() {
         const dataInput = document.getElementById('alb-data').value;
         const dataMs = new Date(dataInput).getTime();
         const codi = document.getElementById('alb-codi').value;
-
-        // Afegim l'estoc
         document.querySelectorAll('.in-alb').forEach(i => {
             let v = parseFloat(i.value) || 0;
             if(v > 0) dades.silos.find(x => x.id === i.dataset.id).estoc += v;
         });
-
-        if(!dades.logs) dades.logs = [];
         dades.logs.unshift({ id: Date.now(), data: dataInput, t: "ALBARÀ", txt: "Nº "+codi });
-        
-        // RECALCULEM: Si la data és passada, restem el consum des de llavors fins ara
         calcularConsum(dataMs);
-        
         ajustarDades(dades);
         showTab('estat');
     }
@@ -256,19 +253,12 @@
         const oID = document.getElementById('p-origen').value;
         const dID = document.getElementById('p-desti').value;
         const k = parseFloat(document.getElementById('p-kg').value);
-        
         let ori = dades.silos.find(s => s.id === oID);
         if(!k || k > ori.estoc) return alert("Error en quantitat");
-
         ori.estoc -= k;
-        if(dID === "INF") dades.infermeria.estoc += k; 
-        else dades.silos.find(s => s.id === dID).estoc += k;
-
+        if(dID === "INF") dades.infermeria.estoc += k; else dades.silos.find(s => s.id === dID).estoc += k;
         dades.logs.unshift({ id: Date.now(), data: dataInput, t: "PINSO", txt: k+"kg de "+oID+" a "+dID });
-        
-        // Recalculem consum per si la data és anterior
         calcularConsum(dataMs);
-        
         ajustarDades(dades);
         showTab('estat');
     }
@@ -279,10 +269,7 @@
         const n = parseInt(document.getElementById('a-n').value) || 0;
         const idOri = document.getElementById('a-origen').value;
         const idDes = document.getElementById('a-desti').value;
-
-        // Abans de moure els animals, ens assegurem que el consum actual estigui al dia
         calcularConsum();
-
         if(t === "TRASLLAT") {
             (idOri==="INF"?dades.infermeria:dades.silos.find(s=>s.id===idOri)).cap -= n;
             (idDes==="INF"?dades.infermeria:dades.silos.find(s=>s.id===idDes)).cap += n;
@@ -291,17 +278,47 @@
         } else {
             (idOri==="INF"?dades.infermeria:dades.silos.find(s=>s.id===idOri)).cap -= n;
         }
-
         dades.logs.unshift({ id: Date.now(), data: dataInput, t: t, txt: n+" caps ("+idOri+"->"+idDes+")" });
         ajustarDades(dades);
         showTab('estat');
     }
 
+    // --- FUNCIONS DE LOG (EDITAR / ELIMINAR) ---
+
     function renderLogs() {
-        document.getElementById('log-llista').innerHTML = (dades.logs || []).slice(0, 30).map(l => `
-            <div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">
+        const logCont = document.getElementById('log-llista');
+        logCont.innerHTML = (dades.logs || []).slice(0, 30).map((l, index) => `
+            <div class="log-item">
                 <span><b>[${l.data}]</b> ${l.t}: ${l.txt}</span>
+                <div class="log-actions">
+                    <button class="btn-mini btn-edit" onclick="editarLog(${index})">✏️</button>
+                    <button class="btn-mini btn-del" onclick="eliminarLog(${index})">🗑️</button>
+                </div>
             </div>`).join('') || 'Sense registres.';
+    }
+
+    function eliminarLog(index) {
+        if(confirm("Segur que vols eliminar aquest registre? (Això no revertirà els quilos, només esborra l'entrada del log)")) {
+            dades.logs.splice(index, 1);
+            ajustarDades(dades);
+        }
+    }
+
+    function editarLog(index) {
+        let l = dades.logs[index];
+        let novaData = prompt("Nova data (AAAA-MM-DD):", l.data);
+        let nouTxt = prompt("Modificar descripció:", l.txt);
+        if(novaData !== null && nouTxt !== null) {
+            l.data = novaData;
+            l.txt = nouTxt;
+            ajustarDades(dades);
+        }
+    }
+
+    function canviTipusMov() {
+        const t = document.getElementById('a-tipus').value;
+        document.getElementById('div-origen').style.display = (t==="ENTRADA") ? "none" : "block";
+        document.getElementById('div-desti').style.display = (t==="MORT" || t==="SORTIDA") ? "none" : "block";
     }
 
     function selects() {
