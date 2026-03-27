@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moli v36.4 - Edició Completa</title>
+    <title>Moli v36.5 - Connexió Segura</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
     <style>
         :root { --p: #1a252f; --s: #27ae60; --w: #f39c12; --d: #c0392b; --bg: #ecf0f1; --inf: #8e44ad; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; font-size: 14px; }
@@ -35,20 +37,21 @@
 
     <div id="login-screen">
         <h2>MOLÍ DE CALABUIG</h2>
-        <p style="opacity: 0.8;">Accés restringit (v36.4)</p>
-        <input type="text" id="pin-input" placeholder="PIN d'accés" style="max-width: 200px; text-align: center;">
+        <p style="opacity: 0.8;">Accés restringit (v36.5)</p>
+        <input type="password" id="pin-input" placeholder="PIN d'accés" style="max-width: 200px; text-align: center;">
         <button class="btn-gran" style="background: var(--s); max-width: 200px;" onclick="checkPin()">ENTRAR</button>
     </div>
 
     <div id="app-content" class="hidden">
         <div class="header">
-            <div>Moli de Calabuig v36.4</div>
-            <div class="status-cloud">☁️ NÚVOL ACTIU</div>
+            <div>Moli de Calabuig v36.5</div>
+            <div class="status-cloud">☁️ NÚVOL SEGUR ACTIU</div>
+
         </div>
 
         <div class="nav">
-            <button class="tab-btn active" id="btn-estat" onclick="showTab('estat')">📦 SILOS</button>
-            <button class="tab-btn" id="btn-entrada" onclick="showTab('entrada')">🚛 ALB.</button>
+            <button class="tab-btn active" id="btn-estat" onclick="showTab('estat')">📉 SILOS</button>
+            <button class="tab-btn" id="btn-entrada" onclick="showTab('entrada')">🚜 ALB.</button>
             <button class="tab-btn" id="btn-mov-p" onclick="showTab('mov-p')">⚖️ PINS.</button>
             <button class="tab-btn" id="btn-mov-a" onclick="showTab('mov-a')">🐄 BEST.</button>
             <button class="tab-btn" id="btn-historic" onclick="showTab('historic')">📜 LOG</button>
@@ -58,7 +61,7 @@
 
         <div id="sec-entrada" class="hidden">
             <div class="card" style="max-width: 400px; margin: auto;">
-                <h3>🚛 Nou Albarà</h3>
+                <h3>📝 Nou Albarà</h3>
                 <input type="date" id="alb-data">
                 <input type="text" id="alb-codi" placeholder="Número Albarà">
                 <input type="number" id="alb-total" placeholder="Total Kg" oninput="validarAlb()">
@@ -70,7 +73,7 @@
 
         <div id="sec-mov-p" class="hidden">
             <div class="card" style="max-width: 400px; margin: auto;">
-                <h3>⚖️ Moure Pinso Intern</h3>
+                <h3>🔄 Moure Pinso Intern</h3>
                 <input type="date" id="p-data">
                 <label>Origen:</label><select id="p-origen"></select>
                 <label>Destí:</label><select id="p-desti"></select>
@@ -81,11 +84,12 @@
 
         <div id="sec-mov-a" class="hidden">
             <div class="card" style="max-width: 400px; margin: auto;">
-                <h3>🐄 Gestió de Bestiar</h3>
+                <h3>🐂 Gestió de Bestiar</h3>
                 <input type="date" id="a-data">
                 <select id="a-tipus" onchange="canviTipusMov()">
                     <option value="TRASLLAT">Trasllat Intern</option>
-                    <option value="ENTRADA">Entrada de Garrins</option>
+                    <option value="ENTRADA">Entrada d'Animals</option>
+
                     <option value="MORT">Baixa (Mort)</option>
                     <option value="SORTIDA">Sortida (Escorxador/Venda)</option>
                 </select>
@@ -116,17 +120,34 @@
         appId: "1:491308980737:web:ecb92fcef2075faffcbe00"
     };
 
+    // Inicialització de Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const auth = firebase.auth();
+
     let dades = { silos: [], logs: [], lastSync: Date.now(), infermeria: { id: "INF", animals: 0, estoc: 0 } };
     const avuiStr = new Date().toISOString().split('T')[0];
+
+    // Funcions de Seguretat i Connexió
+    function iniciarConnexioSegura() {
+        auth.signInAnonymously()
+            .then(() => {
+                console.log("Connexió xifrada establerta amb el núvol.");
+                escudarNúvol();
+            })
+            .catch((error) => {
+                alert("Error de seguretat: " + error.message);
+            });
+    }
 
     function checkPin() {
         if(document.getElementById('pin-input').value === PIN_CORRECTE) {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-content').classList.remove('hidden');
-            escudarNúvol();
-        } else { alert("PIN Incorrecte"); }
+            iniciarConnexioSegura();
+        } else {
+            alert("PIN Incorrecte");
+        }
     }
 
     function escudarNúvol() {
@@ -135,7 +156,7 @@
             if (val) {
                 dades = val;
                 if(!dades.logs) dades.logs = [];
-                calcularConsum(); 
+                calcularConsum();
                 renderSilos();
                 selects();
                 if (document.getElementById('sec-historic').className !== 'hidden') renderLogs();
@@ -143,11 +164,13 @@
         });
     }
 
+    // Funcions de Lògica de Negoci
+
     function calcularConsum(dataReferenciaManual = null) {
         const ara = Date.now();
         const iniciCàlcul = dataReferenciaManual || dades.lastSync || ara;
         const hores = (ara - iniciCàlcul) / (1000 * 60 * 60);
-        if (hores > 0.05) { 
+        if (hores > 0.05) {
             dades.silos.forEach(s => {
                 if (s.cap > 0) {
                     let consumHores = (s.cap * 9 / 24) * hores;
@@ -190,9 +213,9 @@
         if(t==='historic') renderLogs();
     }
 
-    function ajustarDades(novaData) { 
+    function ajustarDades(novaData) {
         novaData.lastSync = Date.now();
-        db.ref('moli_data').set(novaData); 
+        db.ref('moli_data').set(novaData);
     }
 
     function ajust(i) {
@@ -219,7 +242,7 @@
             s += v;
         });
         let ok = t > 0 && Math.abs(t - s) < 1 && !over && document.getElementById('alb-codi').value !== "";
-        document.getElementById('alb-fb').innerHTML = over ? "🚨 SOBREPASSES MÀXIM!" : (ok ? "✅ QUADRAT" : "Falten " + Math.round(t-s) + "kg");
+        document.getElementById('alb-fb').innerHTML = over ? "⚠️ SOBREPASSES MÀXIM!" : (ok ? "✅ QUADRAT" : "Falten " + Math.round(t-s) + "kg");
         document.getElementById('btn-save-alb').disabled = !ok;
     }
 
@@ -292,11 +315,9 @@
         let l = dades.logs[index];
         let novaData = prompt("Data (AAAA-MM-DD):", l.data);
         if(!novaData) return;
-        
         let nouTxt = prompt("Descripció del moviment:", l.txt);
         if(!nouTxt) return;
 
-        // Si és un PINSO o ALBARÀ, permetem corregir els quilos
         if(l.t === "PINSO" || l.t === "ALBARÀ") {
             let nouKg = prompt("Corregir quilos totals (només número):", l.kg);
             if(nouKg !== null && parseFloat(nouKg) !== l.kg) {
@@ -307,7 +328,6 @@
                     if(ori) ori.estoc -= diff;
                     if(des) des.estoc += diff;
                 } else {
-                    // Per albarans senzills, ajustem el primer silo del llistat o demanem silo
                     let siloID = l.val.split(":")[0];
                     let silo = dades.silos.find(s => s.id === siloID);
                     if(silo) silo.estoc += diff;
@@ -315,7 +335,6 @@
                 l.kg = parseFloat(nouKg);
             }
         }
-        
         l.data = novaData;
         l.txt = nouTxt;
         ajustarDades(dades);
@@ -323,9 +342,9 @@
 
     function eliminarLog(index) {
         let l = dades.logs[index];
-        let revertir = (l.t === "ALBARÀ" || l.t === "PINSO") ? 
+        let revertir = (l.t === "ALBARÀ" || l.t === "PINSO") ?
             confirm("Vols REVERTIR els quilos al silo abans d'esborrar?") : confirm("Segur que vols esborrar?");
-        
+       
         if(!revertir && (l.t !== "ALBARÀ" && l.t !== "PINSO")) return;
 
         if(revertir && (l.t === "ALBARÀ" || l.t === "PINSO")) {
@@ -357,9 +376,9 @@
         let opKg = dades.silos.map(s => `<option value="${s.id}">${s.id} (${Math.round(s.estoc)}kg)</option>`).join('');
         let opCap = dades.silos.map(s => `<option value="${s.id}">${s.id} (${s.cap} cap)</option>`).join('');
         document.getElementById('p-origen').innerHTML = opKg;
-        document.getElementById('p-desti').innerHTML = `<option value="INF">🏥 INF</option>` + dades.silos.map(s => `<option value="${s.id}">${s.id}</option>`).join('');
-        document.getElementById('a-origen').innerHTML = `<option value="INF">🏥 INF</option>` + opCap;
-        document.getElementById('a-desti').innerHTML = `<option value="INF">🏥 INF</option>` + opCap;
+        document.getElementById('p-desti').innerHTML = `<option value="INF">🚑 INF</option>` + dades.silos.map(s => `<option value="${s.id}">${s.id}</option>`).join('');
+        document.getElementById('a-origen').innerHTML = `<option value="INF">🚑 INF</option>` + opCap;
+        document.getElementById('a-desti').innerHTML = `<option value="INF">🚑 INF</option>` + opCap;
     }
 </script>
 </body>
